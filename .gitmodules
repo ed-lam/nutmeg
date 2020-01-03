@@ -4,3 +4,6 @@
 [submodule "geas"]
 	path = geas
 	url = https://bitbucket.org/gkgange/geas.git
+[submodule "libminizinc"]
+	path = libminizinc
+	url = https://github.com/MiniZinc/libminizinc
