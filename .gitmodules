@@ -1,0 +1,6 @@
+[submodule "fmt"]
+	path = fmt
+	url = https://github.com/fmtlib/fmt.git
+[submodule "geas"]
+	path = geas
+	url = https://bitbucket.org/gkgange/geas.git
