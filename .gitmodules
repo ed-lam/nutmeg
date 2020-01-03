@@ -6,4 +6,4 @@
 	url = https://bitbucket.org/gkgange/geas.git
 [submodule "libminizinc"]
 	path = libminizinc
-	url = https://github.com/MiniZinc/libminizinc
+	url = https://github.com/ed-lam/nutmeg-libminizinc.git
