@@ -649,7 +649,7 @@ Model::add_constr_cumulative_optional(
             for (Int t = lb(start[j]); t <= ub(start[j]); ++t)
             {
                 // Create name.
-                auto bin_name = fmt::format("[{} = {}]", name(start[j]), t);
+                auto bin_name = fmt::format("{{{} = {}}}", name(start[j]), t);
 
                 // Create variable in MIP.
                 SCIP_VAR*& var = bin_vars(j, t - e);

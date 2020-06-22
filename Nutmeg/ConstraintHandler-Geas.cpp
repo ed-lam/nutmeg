@@ -135,8 +135,12 @@ bool make_bool_assumptions(
     geas::solver& cp          // CP solver
 )
 {
+    // Check.
+    debug_assert(probdata.cp_bool_vars_[0] == geas::at_False);
+    debug_assert(probdata.cp_bool_vars_[1] == geas::at_True);
+
     // Make assumptions on Boolean variables.
-    for (Int idx = 0; idx < probdata.nb_bool_vars(); ++idx)
+    for (Int idx = 2; idx < probdata.nb_bool_vars(); ++idx)
     {
         const auto mip_var = probdata.mip_bool_vars_[idx];
         debug_assert(mip_var);
@@ -171,8 +175,12 @@ bool make_int_assumptions(
     geas::solver& cp          // CP solver
 )
 {
+    // Check.
+    debug_assert(probdata.int_vars_lb_[0] == 0);
+    debug_assert(probdata.int_vars_ub_[0] == 0);
+
     // Make assumptions on integer variables.
-    for (Int idx = 0; idx < probdata.nb_int_vars(); ++idx)
+    for (Int idx = 1; idx < probdata.nb_int_vars(); ++idx)
     {
         const auto mip_var = probdata.mip_int_vars_[idx];
         if (mip_var)
@@ -338,7 +346,7 @@ NogoodData get_nogood(
     cp.get_conflict(conflict);
 
     // Print.
-#ifdef DEBUG
+#ifndef NDEBUG
     nogood.name = make_nogood_name(probdata, conflict);
     debugln("   Nogood: {}", nogood.name);
 #endif
@@ -606,7 +614,7 @@ void store_solution(
     }
 }
 
-#ifdef DEBUG
+#ifndef NDEBUG
 String make_atom_name(
     ProblemData& probdata,    // Problem data
     geas::patom_t atom        // Atom
@@ -1175,7 +1183,7 @@ SCIP_RETCODE geas_separate(
             SCIP_CONS* cons = nullptr;
             scip_assert(SCIPcreateConsBasicLogicor(scip,
                                                    &cons,
-#ifdef DEBUG
+#ifndef NDEBUG
                                                    nogood.name.c_str(),
 #else
                                                    "",
@@ -1197,7 +1205,7 @@ SCIP_RETCODE geas_separate(
             SCIP_CONS* cons = nullptr;
             scip_assert(SCIPcreateConsBasicBounddisjunction(scip,
                                                             &cons,
-#ifdef DEBUG
+#ifndef NDEBUG
                                                             nogood.name.c_str(),
 #else
                                                             "",

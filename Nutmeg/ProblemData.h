@@ -38,10 +38,17 @@ struct ProblemData
     Vector<Int> int_vars_ub_;
     Vector<String> int_vars_name_;
     geas::bounds_monitor<geas::intvar, int>& int_vars_monitor_;
+    HashTable<Int, IntVar> constants_;
 
     // Objective variable
     Int obj_var_idx_;
     Int cp_dual_bound_;
+
+    // Constraints
+    Int nb_linear_constraints_;
+    Int nb_indicator_constraints_;
+    Int nb_indicator_vars_setpart_constraints_;
+    Int nb_indicator_vars_linking_constraints_;
 
     // Solution
     Solution& sol_;

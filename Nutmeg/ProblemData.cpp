@@ -23,9 +23,15 @@ ProblemData::ProblemData(Model& model, geas::solver& cp, Solution& sol) noexcept
     int_vars_ub_(),
     int_vars_name_(),
     int_vars_monitor_(*geas::bounds_monitor<geas::intvar, int>::create(cp.data)),
+    constants_(),
 
     obj_var_idx_(-1),
     cp_dual_bound_(std::numeric_limits<Int>::min()),
+
+    nb_linear_constraints_(0),
+    nb_indicator_constraints_(0),
+    nb_indicator_vars_setpart_constraints_(0),
+    nb_indicator_vars_linking_constraints_(0),
 
     sol_(sol)
 {
@@ -47,7 +53,7 @@ Int ProblemData::nb_int_vars() const
 //{
 //    release_assert(var.model == this);
 //    release_assert(var.is_valid(), "Invalid variable");
-//#ifdef DEBUG
+//#ifndef NDEBUG
 //    return mip_int_vars_.at(var.idx) != nullptr;
 //#else
 //    return mip_int_vars_[var.idx] != nullptr;

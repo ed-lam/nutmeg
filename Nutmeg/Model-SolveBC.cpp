@@ -1,17 +1,14 @@
 //#define PRINT_DEBUG
 
 #include "Model.h"
-//#include "geas/solver/solver.h"
-//#include "geas/constraints/builtins.h"
-//#include "geas/vars/pred_var.h"
-//#include "geas/vars/monitor.h"
 
 namespace Nutmeg
 {
 
 void Model::minimize_using_bc(
     const IntVar obj_var,
-    const Float time_limit
+    const Float time_limit,
+    const bool verbose
 )
 {
     // Declare.
@@ -30,6 +27,9 @@ void Model::minimize_using_bc(
     release_assert(mip_var(obj_var), "Objective variable is not in the MIP model");
     scip_assert(SCIPchgVarObj(mip_, mip_var(obj_var), 1.0));
     probdata_.obj_var_idx_ = obj_var.idx;
+
+    // Set dual bound.
+    obj_bound_ = lb(obj_var);
 
     // Add variables to monitor of bounds changes.
     for (Int idx = 0; idx < nb_bool_vars(); ++idx)
@@ -54,6 +54,12 @@ void Model::minimize_using_bc(
     // Write LP to file.
 //    scip_assert(SCIPwriteOrigProblem(mip_, "model.lp", 0, 0));
 
+    // Turn off screen log.
+    if (!verbose)
+    {
+        scip_assert(SCIPsetIntParam(mip_, "display/verblevel", 0));
+    }
+
     // Start timer.
     if (time_limit < Infinity)
     {
@@ -63,13 +69,17 @@ void Model::minimize_using_bc(
 
     // Solve.
     scip_assert(SCIPsolve(mip_));
+//    scip_assert(SCIPwriteTransProblem(mip_, "model_transform.lp", 0, 0));
 
     // Stop timer.
     run_time_ = get_cpu_time();
 
     // Print statistics.
-    println("");
-    scip_assert(SCIPprintStatistics(mip_, nullptr));
+    if (verbose)
+    {
+        println("");
+        scip_assert(SCIPprintStatistics(mip_, nullptr));
+    }
 
     // Get status.
     scip_status = SCIPgetStatus(mip_);
@@ -95,7 +105,13 @@ void Model::minimize_using_bc(
     }
 
     // Get dual bound.
-    obj_bound_ = SCIPceil(mip_, SCIPgetDualbound(mip_));
+    {
+        const auto new_obj_bound = SCIPceil(mip_, SCIPgetDualbound(mip_));
+        if (new_obj_bound > obj_bound_)
+        {
+            obj_bound_ = new_obj_bound;
+        }
+    }
 
     // Get status.
     if (scip_status == SCIP_STATUS_OPTIMAL)
@@ -123,39 +139,42 @@ void Model::minimize_using_bc(
 
     // Print status.
     EXIT:
-    println("");
-    println("--------------------------------------------------");
-    println("Method: BC");
-    println("CPU time: {:.2f} seconds", run_time_);
-    println("Status: {}",
-            status_ == Status::Unknown ? "Unknown" :
-            status_ == Status::Optimal ? "Optimal" :
-            status_ == Status::Feasible ? "Feasible" :
-            status_ == Status::Infeasible ? "Infeasible" :
-            "Error");
-    if (obj_ < Infinity)
+    if (verbose)
     {
-        println("Objective value: {:.2f}", obj_);
+        println("");
+        println("--------------------------------------------------");
+        println("Method: BC");
+        println("CPU time: {:.2f} seconds", run_time_);
+        println("Status: {}",
+                status_ == Status::Unknown ? "Unknown" :
+                status_ == Status::Optimal ? "Optimal" :
+                status_ == Status::Feasible ? "Feasible" :
+                status_ == Status::Infeasible ? "Infeasible" :
+                "Error");
+        if (obj_ < Infinity)
+        {
+            println("Objective value: {:.2f}", obj_);
+        }
+        if (obj_bound_ > -Infinity && status_ != Status::Infeasible)
+        {
+            println("Objective bound: {:.2f}", obj_bound_);
+        }
+        println("--------------------------------------------------");
     }
-    if (obj_bound_ > -Infinity && status_ != Status::Infeasible)
-    {
-        println("Objective bound: {:.2f}", obj_bound_);
-    }
-    println("--------------------------------------------------");
 
     // Print solution.
 #ifdef PRINT_DEBUG
     if (status_ == Status::Optimal || status_ == Status::Feasible)
     {
-        debugln("");
-        debugln("Solution:");
+        println("");
+        println("Solution:");
         for (Int idx = 0; idx < nb_int_vars(); ++idx)
         {
-            debugln("   {} = {}", probdata_.int_vars_name_[idx], sol_.int_vars_sol_[idx]);
+            println("   {} = {}", probdata_.int_vars_name_[idx], sol_.int_vars_sol_[idx]);
         }
         for (Int idx = 0; idx < nb_bool_vars(); ++idx)
         {
-            debugln("   {} = {}", probdata_.bool_vars_name_[idx], sol_.bool_vars_sol_[idx]);
+            println("   {} = {}", probdata_.bool_vars_name_[idx], sol_.bool_vars_sol_[idx]);
         }
     }
 #endif

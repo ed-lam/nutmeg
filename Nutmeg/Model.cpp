@@ -2,6 +2,7 @@
 
 #include "Model.h"
 #include "ConstraintHandler-Geas.h"
+#include "EventHandler-NewSolution.h"
 #include "scip/scipdefplugins.h"
 #include "geas/vars/monitor.h"
 
@@ -46,7 +47,15 @@ SCIP_RETCODE callback_probtrans(
     for (auto& var : probdata->mip_int_vars_)
         if (var)
         {
-            scip_assert(SCIPtransformVar(scip, var, &var));
+            if (std::strcmp(SCIPvarGetName(var), "false_neg") == 0)
+            {
+                debug_assert(probdata->bool_vars_name_[1] == "true");
+                var = probdata->mip_bool_vars_[1];
+            }
+            else
+            {
+                scip_assert(SCIPtransformVar(scip, var, &var));
+            }
         }
 
     // Done.
@@ -97,17 +106,23 @@ Model::Model(const Method method) :
     method_(method),
     mip_(nullptr),
     cp_(),
+    print_new_solution_function_(),
 
     probdata_(*this, cp_, sol_),
     status_(Status::Unknown),
-    obj_(Infinity),
-    obj_bound_(-Infinity),
+    obj_(std::numeric_limits<Float>::quiet_NaN()),
+    obj_bound_(std::numeric_limits<Float>::quiet_NaN()),
     sol_(),
 
     time_limit_(),
     start_time_(),
     run_time_(0)
 {
+    // Print.
+#ifndef NDEBUG
+    println("Nutmeg is compiled in debug mode");
+#endif
+
     // Create SCIP.
     scip_assert(SCIPcreate(&mip_));
 
@@ -176,17 +191,9 @@ Model::Model(const Method method) :
 
     // Create variable representing 0.
     {
-        // Create variable in MIP.
-        SCIP_VAR*& mip_var = probdata_.mip_int_vars_.emplace_back();
-        scip_assert(SCIPcreateVarBasic(mip_,
-                                       &mip_var,
-                                       "zero",
-                                       0,
-                                       0,
-                                       0,
-                                       SCIP_VARTYPE_INTEGER));
-        release_assert(mip_var, "Failed to create integer variable in MIP");
-        scip_assert(SCIPaddVar(mip_, mip_var));
+        // Copy FALSE Boolean variable in MIP.
+        SCIP_VAR*& mip_var = probdata_.mip_int_vars_.emplace_back(probdata_.mip_bool_vars_[0]);
+        scip_assert(SCIPcaptureVar(mip_, mip_var));
         probdata_.mip_indicator_vars_idx_.emplace_back();
 
         // Create variable in CP.
@@ -199,6 +206,9 @@ Model::Model(const Method method) :
 
         // Set as objective variable.
         probdata_.obj_var_idx_ = 0;
+
+        // Add to set of constants.
+        probdata_.constants_.insert({0, IntVar(this, 0)});
     }
 
     // Create constraint handler for Geas.
@@ -248,28 +258,86 @@ Model::~Model()
     BMScheckEmptyMemory();
 }
 
-void Model::minimize(const IntVar obj_var, const Float time_limit)
+void Model::add_print_new_solution_function(std::function<void()> print_new_solution_function)
+{
+    if ((method_ == Method::BC || method_ == Method::MIP) && !print_new_solution_function_)
+    {
+        print_new_solution_function_ = print_new_solution_function;
+        scip_assert(includeEventHdlrBestsol(mip_, this));
+    }
+    else
+    {
+        print_new_solution_function_ = print_new_solution_function;
+    }
+}
+
+void Model::minimize(const IntVar obj_var, const Float time_limit, const bool verbose)
 {
     if (method_ == Method::BC)
     {
-        minimize_using_bc(obj_var, time_limit);
+        minimize_using_bc(obj_var, time_limit, verbose);
     }
     else if (method_ == Method::LBBD)
     {
-        minimize_using_lbbd(obj_var, time_limit);
+        minimize_using_lbbd(obj_var, time_limit, verbose);
     }
     else if (method_ == Method::MIP)
     {
-        minimize_using_mip(obj_var, time_limit);
+        minimize_using_mip(obj_var, time_limit, verbose);
     }
     else if (method_ == Method::CP)
     {
-        minimize_using_cp(obj_var, time_limit);
+        minimize_using_cp(obj_var, time_limit, verbose);
     }
     else
     {
         err("Invalid method {}", static_cast<Int>(method_));
     }
+}
+
+Status Model::get_status() const
+{
+    return status_;
+}
+
+Float Model::get_runtime() const
+{
+    release_assert(!std::isnan(run_time_), "Cannot get runtime because the model is not solved");
+    return run_time_;
+}
+
+Int Model::get_dual_bound() const
+{
+    release_assert(!std::isnan(obj_bound_), "Cannot get dual bound because the model is not solved");
+    return obj_bound_;
+}
+
+Int Model::get_primal_bound() const
+{
+    release_assert(!std::isnan(obj_), "Cannot get primal bound because the model is not solved");
+    release_assert(status_ == Status::Optimal || status_ == Status::Feasible,
+                   "Cannot get primal bound because no feasible solution is available");
+    return obj_;
+}
+
+bool Model::get_sol(const BoolVar var)
+{
+    // Check.
+    release_assert(var.model == this, "Variable belongs to a different model");
+    release_assert(0 <= var.idx && var.idx < nb_bool_vars(), "Variable is invalid");
+
+    // Get value.
+    return sol_.bool_vars_sol_[var.idx];
+}
+
+Int Model::get_sol(const IntVar var)
+{
+    // Check.
+    release_assert(var.model == this, "Variable belongs to a different model");
+    release_assert(0 <= var.idx && var.idx < nb_int_vars(), "Variable is invalid");
+
+    // Get value.
+    return sol_.int_vars_sol_[var.idx];
 }
 
 void Model::start_timer(const Float time_limit)

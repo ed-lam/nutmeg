@@ -33,7 +33,7 @@ int main(int argc, char** argv)
     err("Unspecified solving method");
 #endif
     IntVar vars_cost;
-    Matrix<BoolVar> vars_assign;
+    Matrix<BoolVar> vars_job_machine_assignment;
     Matrix<IntVar> vars_start;
 
     // Calculate which assignments don't exceed the job duration.
@@ -59,13 +59,13 @@ int main(int argc, char** argv)
     vars_cost = model.add_int_var(0, max_cost, true, "cost");
 
     // Create assignment variables.
-    vars_assign.clear_and_resize(T, M);
+    vars_job_machine_assignment.clear_and_resize(T, M);
     for (int t = 0; t < T; ++t)
         for (int m = 0; m < M; ++m)
             if (is_valid(t, m))
             {
                 const auto name = fmt::format("assign[{},{}]", t, m);
-                vars_assign(t, m) = model.add_bool_var(name);
+                vars_job_machine_assignment(t, m) = model.add_bool_var(name);
             }
 
     // Create start time variables.
@@ -88,7 +88,7 @@ int main(int argc, char** argv)
             for (int m = 0; m < M; ++m)
                 if (is_valid(t, m))
                 {
-                    vars.push_back(vars_assign(t, m));
+                    vars.push_back(vars_job_machine_assignment(t, m));
                     coeffs.push_back(cost(t, m));
                 }
         model.add_constr_linear(vars, coeffs, Sign::EQ, 0, vars_cost);
@@ -100,7 +100,7 @@ int main(int argc, char** argv)
         Vector<BoolVar> vars;
         for (int m = 0; m < M; ++m)
             if (is_valid(t, m))
-                vars.push_back(vars_assign(t, m));
+                vars.push_back(vars_job_machine_assignment(t, m));
         model.add_constr_set_partition(vars);
     }
 
@@ -114,7 +114,7 @@ int main(int argc, char** argv)
         for (int t = 0; t < T; ++t)
             if (is_valid(t, m))
             {
-                loc_active.push_back(vars_assign(t, m));
+                loc_active.push_back(vars_job_machine_assignment(t, m));
                 loc_start.push_back(vars_start(t, m));
                 loc_duration.push_back(duration(t, m));
                 loc_resource.push_back(resource(t, m));
@@ -133,15 +133,15 @@ int main(int argc, char** argv)
     // Print solution.
     if (model.get_status() == Status::Feasible || model.get_status() == Status::Optimal)
     {
-        println("   LB {}, UB {}", model.get_lb(), model.get_ub());
+        println("LB: {}", model.get_dual_bound());
+        println("UB: {}", model.get_primal_bound());
         for (int t = 0; t < T; ++t)
             for (int m = 0; m < M; ++m)
-                if (is_valid(t, m) && model.get_sol(vars_assign(t, m)))
+                if (is_valid(t, m) && model.get_sol(vars_job_machine_assignment(t, m)))
                 {
                     const auto start = model.get_sol(vars_start(t, m));
                     const auto end = start + duration(t, m);
-                    println("      Task {}, Machine {}, Start {}, End {}",
-                            t, m, start, end);
+                    println("Task {}: Machine {}, Start {}, Complete {}, Cost {}", t, m, start, end, cost(t, m));
                 }
     }
 

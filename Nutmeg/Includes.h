@@ -4,6 +4,7 @@
 #include "Debug.h"
 
 #include <vector>
+#include <unordered_map>
 #include <string>
 #include <utility>
 #include <limits>
@@ -18,6 +19,9 @@ using Float = SCIP_Real;
 
 template<class T>
 using Vector = std::vector<T>;
+
+template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<Key>>
+using HashTable = std::unordered_map<Key, T, Hash, KeyEqual>;
 
 using String = std::string;
 

@@ -39,6 +39,7 @@ class Model
     Method method_;
     SCIP* mip_;
     geas::solver cp_;
+    std::function<void()> print_new_solution_function_;
 
     // Problem
     ProblemData probdata_;
@@ -63,6 +64,13 @@ class Model
     Model& operator=(Model&& model) = delete;
     ~Model();
 
+    // Get solver internal data
+    // ------------------------
+    inline geas::solver_data*& cp_data() { return cp_.data; }
+    inline geas::solver& cp() { return cp_; }
+    inline SCIP* mip() { return mip_; }
+    inline void mark_as_infeasible() { status_ = Status::Infeasible; }
+
     // Create variables
     // ----------------
     BoolVar add_bool_var(const String& name = "");
@@ -71,6 +79,9 @@ class Model
                        const bool include_in_mip = false,
                        const String& name = "");
     Vector<BoolVar> add_indicator_vars(const IntVar var, const Vector<Int>& domain = {});
+    IntVar add_mip_var(const IntVar var);
+    inline BoolVar add_mip_var(const BoolVar var) { return var; }
+    void add_mip_int_var_as_bool_var_alias(const BoolVar bool_var, const IntVar int_var);
 
     // Functions to get variables
     // --------------------------
@@ -84,6 +95,21 @@ class Model
     inline BoolVar get_false() { return BoolVar(this, 0); }
     inline BoolVar get_true() { return BoolVar(this, 1); }
     inline IntVar get_zero() { return IntVar(this, 0); }
+    
+    // Functions to get internal variables data
+    // ----------------------------------------
+    inline SCIP_VAR* mip_var(const BoolVar var) const { return probdata_.mip_var(var); }
+    inline SCIP_VAR* mip_var(const IntVar var) const { return probdata_.mip_var(var); }
+    inline bool is_pos_var(const BoolVar var) const { return probdata_.is_pos_var(var); }
+    inline bool has_mip_indicator_vars(const IntVar var) const { return probdata_.has_mip_indicator_vars(var); }
+    inline SCIP_VAR* mip_indicator_var(const IntVar var, const Int k) const { return probdata_.mip_indicator_var(var, k); }
+    inline geas::patom_t cp_var(const BoolVar var) const { return probdata_.cp_var(var); }
+    inline geas::intvar cp_var(const IntVar var) const { return probdata_.cp_var(var); }
+
+    // Functions to get internal constraints data
+    // ------------------------------------------
+    inline Int& nb_linear_constraints() { return probdata_.nb_linear_constraints_; }
+    inline Int& nb_indicator_constraints() { return probdata_.nb_indicator_constraints_; }
 
     // Create constraints
     // ------------------
@@ -163,14 +189,17 @@ class Model
 
     // Solve
     // -----
-    void satisfy(const Float time_limit = Infinity) { minimize(get_zero(), time_limit); }
-    void minimize(const IntVar obj_var, const Float time_limit = Infinity);
+    void add_print_new_solution_function(std::function<void()> print_new_solution_function);
+    void satisfy(const Float time_limit = Infinity, const bool verbose = true) { minimize(get_zero(), time_limit, verbose); }
+    void minimize(const IntVar obj_var, const Float time_limit = Infinity, const bool verbose = true);
+    inline void print_new_solution() { print_new_solution_function_(); }
 
     // Solution
     // --------
-    inline Status get_status() const { return status_; }
-    inline Int get_lb() const { return obj_bound_; }
-    inline Int get_ub() const { return obj_; }
+    Status get_status() const;
+    Float get_runtime() const;
+    Int get_dual_bound() const;
+    Int get_primal_bound() const;
     bool get_sol(const BoolVar var);
     Int get_sol(const IntVar var);
 
@@ -179,22 +208,12 @@ class Model
     void write_lp();
 
   private:
-    // Functions to get variables
-    // --------------------------
-    inline SCIP_VAR* mip_var(const BoolVar var) const { return probdata_.mip_var(var); }
-    inline SCIP_VAR* mip_var(const IntVar var) const { return probdata_.mip_var(var); }
-    inline bool is_pos_var(const BoolVar var) const { return probdata_.is_pos_var(var); }
-    inline bool has_mip_indicator_vars(const IntVar var) const { return probdata_.has_mip_indicator_vars(var); }
-    inline SCIP_VAR* mip_indicator_var(const IntVar var, const Int k) const { return probdata_.mip_indicator_var(var, k); }
-    inline geas::patom_t cp_var(const BoolVar var) const { return probdata_.cp_var(var); }
-    inline geas::intvar cp_var(const IntVar var) const { return probdata_.cp_var(var); }
-
     // Solve
     // -----
-    void minimize_using_bc(const IntVar obj_var, const Float time_limit);
-    void minimize_using_lbbd(const IntVar obj_var, const Float time_limit);
-    void minimize_using_mip(const IntVar obj_var, const Float time_limit);
-    void minimize_using_cp(const IntVar obj_var, const Float time_limit);
+    void minimize_using_bc(const IntVar obj_var, const Float time_limit, const bool verbose);
+    void minimize_using_lbbd(const IntVar obj_var, const Float time_limit, const bool verbose);
+    void minimize_using_mip(const IntVar obj_var, const Float time_limit, const bool verbose);
+    void minimize_using_cp(const IntVar obj_var, const Float time_limit, const bool verbose);
 
     // Timer
     // -----

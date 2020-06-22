@@ -11,9 +11,12 @@ namespace Nutmeg
 
 void Model::minimize_using_lbbd(
     const IntVar obj_var,
-    const Float time_limit
+    const Float time_limit,
+    const bool verbose
 )
 {
+    not_yet_implemented();
+
 //    TODO
 //    // Check for failure at the root level.
 //    if (status_ == Status::Infeasible)
@@ -302,7 +305,7 @@ void Model::minimize_using_lbbd(
 //                SCIP_CONS* cons = nullptr;
 //                scip_assert(SCIPcreateConsBasicLogicor(mip_,
 //                                                       &cons,
-//#ifdef DEBUG
+//#ifndef NDEBUG
 //                                                       nogood.name.c_str(),
 //#else
 //                                                       "",
@@ -374,16 +377,16 @@ void Model::minimize_using_lbbd(
 //#ifdef PRINT_DEBUG
 //    if (status_ == Status::Optimal || status_ == Status::Feasible)
 //    {
-//        debugln("");
-//        debugln("Solution:");
+//        println("");
+//        println("Solution:");
 //        for (Int idx = 0; idx < nb_int_vars(); ++idx)
 //        {
-//            debugln("   {} = {}",
+//            println("   {} = {}",
 //                    probdata_.int_vars_name_[idx], sol_.int_vars_sol_[idx]);
 //        }
 //        for (Int idx = 0; idx < nb_bool_vars(); ++idx)
 //        {
-//            debugln("   {} = {}",
+//            println("   {} = {}",
 //                    probdata_.bool_vars_name_[idx], sol_.bool_vars_sol_[idx]);
 //        }
 //    }

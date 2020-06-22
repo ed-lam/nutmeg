@@ -32,7 +32,7 @@ int main(int argc, char** argv)
     err("Unspecified solving method");
 #endif
     IntVar vars_makespan;
-    Vector<Vector<BoolVar>> vars_assign;
+    Matrix<BoolVar> vars_job_machine_assignment;
     Matrix<IntVar> vars_start;
 
     // Calculate which assignments don't exceed the job duration.
@@ -53,16 +53,14 @@ int main(int argc, char** argv)
     vars_makespan = model.add_int_var(0, max_makespan, true, "makespan");
 
     // Create assignment variables.
-    vars_assign.resize(T);
+    vars_job_machine_assignment.clear_and_resize(T, M);
     for (int t = 0; t < T; ++t)
-    {
-        const auto name = fmt::format("assign[{}]", t);
-        vars_assign[t] = model.add_indicator_vars(model.add_int_var(0, M - 1, false, name));
-
         for (int m = 0; m < M; ++m)
-            if (!is_valid(t, m))
-                model.add_constr_fix(~vars_assign[t][m]);
-    }
+            if (is_valid(t, m))
+            {
+                const auto name = fmt::format("assign[{},{}]", t, m);
+                vars_job_machine_assignment(t, m) = model.add_bool_var(name);
+            }
 
     // Create start time variables.
     vars_start.clear_and_resize(T, M);
@@ -84,12 +82,22 @@ int main(int argc, char** argv)
                 // assign[t,m] -> makespan >= start[t,m] + duration[t,m]
                 // assign[t,m] -> start[t,m] - makespan <= -duration[t,m]
                 {
-                    model.add_constr_reify_subtraction_leq(vars_assign[t][m],
+                    model.add_constr_reify_subtraction_leq(vars_job_machine_assignment(t, m),
                                                            vars_start(t, m),
                                                            vars_makespan,
                                                            -duration(t, m));
                 }
             }
+
+    // Create assignment constraints.
+    for (int t = 0; t < T; ++t)
+    {
+        Vector<BoolVar> vars;
+        for (int m = 0; m < M; ++m)
+            if (is_valid(t, m))
+                vars.push_back(vars_job_machine_assignment(t, m));
+        model.add_constr_set_partition(vars);
+    }
 
     // Create scheduling constraints.
     for (int m = 0; m < M; ++m)
@@ -101,7 +109,7 @@ int main(int argc, char** argv)
         for (int t = 0; t < T; ++t)
             if (is_valid(t, m))
             {
-                loc_active.push_back(vars_assign[t][m]);
+                loc_active.push_back(vars_job_machine_assignment(t, m));
                 loc_start.push_back(vars_start(t, m));
                 loc_duration.push_back(duration(t, m));
                 loc_resource.push_back(resource(t, m));
@@ -121,15 +129,15 @@ int main(int argc, char** argv)
     // Print solution.
     if (model.get_status() == Status::Feasible || model.get_status() == Status::Optimal)
     {
-        println("   LB {}, UB {}", model.get_lb(), model.get_ub());
+        println("LB: {}", model.get_dual_bound());
+        println("UB: {}", model.get_primal_bound());
         for (int t = 0; t < T; ++t)
             for (int m = 0; m < M; ++m)
-                if (is_valid(t, m) && model.get_sol(vars_assign[t][m]))
+                if (is_valid(t, m) && model.get_sol(vars_job_machine_assignment(t, m)))
                 {
                     const auto start = model.get_sol(vars_start(t, m));
                     const auto end = start + duration(t, m);
-                    println("      Task {}, Machine {}, Start {}, End {}",
-                            t, m, start, end);
+                    println("Task {}: Machine {}, Start {}, Complete {}", t, m, start, end);
                 }
     }
 

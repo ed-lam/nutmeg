@@ -16,7 +16,7 @@ struct NogoodData
     Vector<SCIP_BOUNDTYPE> signs;
     Vector<SCIP_Real> bounds;
     bool all_binary{true};
-#ifdef DEBUG
+#ifndef NDEBUG
     String name;
 #endif
 };
@@ -80,7 +80,7 @@ Nutmeg::NogoodData get_nogood(
     Nutmeg::ProblemData& probdata    // Problem data
 );
 
-#ifdef DEBUG
+#ifndef NDEBUG
 Nutmeg::String make_nogood_name(
     Nutmeg::ProblemData& probdata,    // Problem data
     vec<geas::patom_t>& conflict      // Nogood

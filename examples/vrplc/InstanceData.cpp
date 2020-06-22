@@ -2,8 +2,6 @@
 #include <fstream>
 #include <sstream>
 
-#define SCALE 23
-
 static String trim(String& s)
 {
     s.erase(s.begin(),
@@ -21,12 +19,12 @@ static String trim(String& s)
     return s;
 }
 
-static inline String fix_data_name(const String& str)
+static inline String fix_instance_name(const String& str)
 {
-    String data_name(str);
-    trim(data_name);
-    std::replace(data_name.begin(), data_name.end(), ' ', '_');
-    return data_name;
+    String instance_name(str);
+    trim(instance_name);
+    std::replace(instance_name.begin(), instance_name.end(), ' ', '_');
+    return instance_name;
 }
 
 static inline Vector<String> read_file(const String& instance_file_path)
@@ -37,7 +35,7 @@ static inline Vector<String> read_file(const String& instance_file_path)
     std::ifstream f(instance_file_path);
     if (!f)
     {
-        err("Cannot open data file {}", instance_file_path);
+        err("Cannot open instance file {}", instance_file_path);
     }
 
     // Read the file.
@@ -87,54 +85,29 @@ InstanceData::InstanceData(const String& instance_file_path)
             Vector<String> str = split_string(lines[i], ':');
             if (str.size() != 2)
             {
-                err("Data file {} has invalid parameters section (multiple colons)",
-                    instance_file_path);
+                err("Data file {} has invalid parameters section (multiple colons)", instance_file_path);
             }
 
             // Read the parameter.
             if (str[0] == "DataName" || str[0] == "InstanceName")
             {
-                data_name = fix_data_name(str[1]);
+                instance_name = fix_instance_name(str[1]);
             }
             else if (str[0] == "T")
             {
-                T = SCALE * atoi(str[1].c_str());
+                T = atoi(str[1].c_str());
             }
             else if (str[0] == "C")
             {
                 C = atoi(str[1].c_str());
             }
-            else if (str[0] == "ResourceType")
-            {
-                const auto val = trim(str[1]);
-                if (val == "ServiceResources")
-                {
-                    resource_type = ResourceType::Service;
-                }
-                else if (val == "VisitResources")
-                {
-                    resource_type = ResourceType::Visit;
-                }
-                else if (val == "NoResources")
-                {
-                    resource_type = ResourceType::None;
-                }
-                else
-                {
-                    err("Data file{}s has unknown resource type {}",
-                        instance_file_path,
-                        val);
-                }
-            }
             else if (str[0] == "Q")
             {
                 Q = atoi(str[1].c_str());
             }
-            else
+            else if (str[0] != "R" && str[0] != "ResourceType")
             {
-                err("Data file %s has unknown parameter {}",
-                    instance_file_path,
-                    str[0]);
+                err("Data file {} has unknown parameter {}", instance_file_path, str[0]);
             }
         }
     }
@@ -160,7 +133,7 @@ InstanceData::InstanceData(const String& instance_file_path)
                 const auto index = find(vals.cbegin(), vals.cend(), "L");
                 if (index == vals.cend())
                 {
-                    err("Cannot find L column in data file");
+                    err("Cannot find L column in instance file");
                 }
                 l_col = index - vals.cbegin();
             }
@@ -168,7 +141,7 @@ InstanceData::InstanceData(const String& instance_file_path)
                 const auto index = find(vals.cbegin(), vals.cend(), "X");
                 if (index == vals.cend())
                 {
-                    err("Cannot find X column in data file");
+                    err("Cannot find X column in instance file");
                 }
                 x_col = index - vals.cbegin();
             }
@@ -176,7 +149,7 @@ InstanceData::InstanceData(const String& instance_file_path)
                 const auto index = find(vals.cbegin(), vals.cend(), "Y");
                 if (index == vals.cend())
                 {
-                    err("Cannot find Y column in data file");
+                    err("Cannot find Y column in instance file");
                 }
                 y_col = index - vals.cbegin();
             }
@@ -192,8 +165,8 @@ InstanceData::InstanceData(const String& instance_file_path)
                 ss >> vals[j];
 
             loc_name.push_back(move(vals[l_col]));
-            loc_x.push_back(SCALE * atoi(vals[x_col].c_str()));
-            loc_y.push_back(SCALE * atoi(vals[y_col].c_str()));
+            loc_x.push_back(atoi(vals[x_col].c_str()));
+            loc_y.push_back(atoi(vals[y_col].c_str()));
         }
     }
     L = static_cast<LocationNumber>(loc_name.size());
@@ -230,7 +203,7 @@ InstanceData::InstanceData(const String& instance_file_path)
                 const auto index = find(vals.cbegin(), vals.cend(), "R");
                 if (index == vals.cend())
                 {
-                    err("Cannot find R column in data file");
+                    err("Cannot find R column in instance file");
                 }
                 r_col = index - vals.cbegin();
             }
@@ -238,7 +211,7 @@ InstanceData::InstanceData(const String& instance_file_path)
                 const auto index = find(vals.cbegin(), vals.cend(), "L");
                 if (index == vals.cend())
                 {
-                    err("Cannot find L column in data file");
+                    err("Cannot find L column in instance file");
                 }
                 l_col = index - vals.cbegin();
             }
@@ -246,7 +219,7 @@ InstanceData::InstanceData(const String& instance_file_path)
                 const auto index = find(vals.cbegin(), vals.cend(), "A");
                 if (index == vals.cend())
                 {
-                    err("Cannot find A column in data file");
+                    err("Cannot find A column in instance file");
                 }
                 a_col = index - vals.cbegin();
             }
@@ -254,7 +227,7 @@ InstanceData::InstanceData(const String& instance_file_path)
                 const auto index = find(vals.cbegin(), vals.cend(), "B");
                 if (index == vals.cend())
                 {
-                    err("Cannot find B column in data file");
+                    err("Cannot find B column in instance file");
                 }
                 b_col = index - vals.cbegin();
             }
@@ -262,7 +235,7 @@ InstanceData::InstanceData(const String& instance_file_path)
                 const auto index = find(vals.cbegin(), vals.cend(), "S");
                 if (index == vals.cend())
                 {
-                    err("Cannot find S column in data file");
+                    err("Cannot find S column in instance file");
                 }
                 s_col = index - vals.cbegin();
             }
@@ -270,7 +243,7 @@ InstanceData::InstanceData(const String& instance_file_path)
                 const auto index = find(vals.cbegin(), vals.cend(), "Q");
                 if (index == vals.cend())
                 {
-                    err("Cannot find Q column in data file");
+                    err("Cannot find Q column in instance file");
                 }
                 q_col = index - vals.cbegin();
             }
@@ -286,17 +259,15 @@ InstanceData::InstanceData(const String& instance_file_path)
                 ss >> vals[j];
 
             r.push_back(move(vals[r_col]));
-            a.push_back(SCALE * atoi(vals[a_col].c_str()));
-            b.push_back(SCALE * atoi(vals[b_col].c_str()));
-            s.push_back(SCALE * atoi(vals[s_col].c_str()));
+            a.push_back(atoi(vals[a_col].c_str()));
+            b.push_back(atoi(vals[b_col].c_str()));
+            s.push_back(atoi(vals[s_col].c_str()));
             q.push_back(atoi(vals[q_col].c_str()));
 
             const auto index = find(loc_name.cbegin(), loc_name.cend(), vals[l_col]);
             if (index == loc_name.cend())
             {
-                err("Request %s has invalid location name %s",
-                          r.back(),
-                          vals[l_col]);
+                err("Request {} has invalid location name {}", r.back(), vals[l_col]);
 
             }
             l.push_back(static_cast<LocationNumber>(index - loc_name.cbegin()));
@@ -308,7 +279,7 @@ InstanceData::InstanceData(const String& instance_file_path)
         r.emplace_back("R-E");
         l.emplace_back(0);
         a.emplace_back(0);
-        b.emplace_back(SCALE * T);
+        b.emplace_back(T);
         s.emplace_back(0);
         q.emplace_back(0);
     }
@@ -316,14 +287,6 @@ InstanceData::InstanceData(const String& instance_file_path)
     // Get request counts.
     N = static_cast<Request>(r.size());
     R = N - 2;
-    P = R / 2;
-
-    // Reset resources type if resources are unnecessary.
-    if (C == 0 || resource_type == ResourceType::None)
-    {
-        C = 0;
-        resource_type = ResourceType::None;
-    }
 
     // Create cost matrix.
     cost_matrix = Matrix<Cost>(N, N);
@@ -348,11 +311,11 @@ InstanceData::InstanceData(const String& instance_file_path)
     {
         if (cost_matrix(i, i) != 0)
         {
-            err("Arc (%d,%d) has positive cost (%.2f)", i, i, cost_matrix(i, i));
+            err("Arc ({},{}) has positive cost {:.2f}", i, i, cost_matrix(i, i));
         }
         if (time_matrix(i, i) != 0)
         {
-            err("Arc (%d,%d) has positive cost (%.2f)", i, i, cost_matrix(i, i));
+            err("Arc ({},{}) has positive cost {:.2f}", i, i, cost_matrix(i, i));
         }
     }
 
@@ -374,21 +337,21 @@ InstanceData::InstanceData(const String& instance_file_path)
 
 void InstanceData::print() const
 {
-    println("Data name: %s\n", data_name);
-    println("P: %d\n", P);
-    println("R: %d\n", 2 * P);
-    println("L: %d\n", L);
-    println("C: %d\n", C);
-    if (resource_type == ResourceType::Service)
+    println("Instance name: {}", instance_name);
+    println("R: {}", R);
+    println("L: {}", L);
+    println("C: {}", C);
+    println("");
+
+    println("Cost matrix:");
+    cost_matrix.print();
+    println("Time matrix:");
+    time_matrix.print();
+
+    println("{:>10s}{:>10s}{:>10s}{:>10s}{:>10s}{:>10s}", "R", "L", "A", "B", "S", "Q");
+    for (Request i = 0; i < N; ++i)
     {
-        println("Resource type: Service resources\n");
+        println("{:>10s}{:>10s}{:>10d}{:>10d}{:>10d}{:>10d}", r[i], loc_name[l[i]], a[i], b[i], s[i], abs(q[i]));
     }
-    else if (resource_type == ResourceType::Visit)
-    {
-        println("Resource type: Visit resources\n");
-    }
-    else
-    {
-        println("Resource type: No resources\n");
-    }
+    println("");
 }

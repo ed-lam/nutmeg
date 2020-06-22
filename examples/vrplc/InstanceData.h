@@ -6,37 +6,27 @@
 
 using namespace Nutmeg;
 
-using Request             = Int;
-using Cost                = Float;
-using Time                = Int;
-using Load                = Int;
-using LocationNumber      = Int;
-using LocationPosition    = Int;
-using ResourceCount       = Int;
-using ResourceConsumption = Int;
-
-enum class ResourceType
-{
-    None,
-    Service,
-    Visit
-};
+using Request          = Int;
+using Cost             = Int;
+using Time             = Int;
+using Load             = Int;
+using LocationNumber   = Int;
+using LocationPosition = Int;
+using ResourceCount    = Int;
 
 class InstanceData
 {
   public:
     // Instance data
-    String data_name;
+    String instance_name;
     Load Q;
     LocationNumber L;
     ResourceCount C;
-    ResourceType resource_type;
     Vector<String> loc_name;
     Vector<LocationPosition> loc_x;
     Vector<LocationPosition> loc_y;
     Request N;
     Request R;
-    Request P;
     Matrix<Cost> cost_matrix;
     Matrix<Time> time_matrix;
     Matrix<Time> service_plus_travel_time_matrix;

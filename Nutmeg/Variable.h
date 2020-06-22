@@ -31,6 +31,7 @@ class BoolVar
 
     // Check validity of the variable
     inline bool is_valid() const { return model && idx >= 0; }
+    inline bool is_same(const BoolVar other) const { return model == other.model && idx == other.idx; }
 
     // Get negated literal
     BoolVar operator~();
@@ -60,6 +61,7 @@ class IntVar
 
     // Check validity of the variable
     inline bool is_valid() const { return model && idx >= 0; }
+    inline bool is_same(const IntVar other) const { return model == other.model && idx == other.idx; }
 
     // Get literals
 //    BoolVar operator==(const Int val);

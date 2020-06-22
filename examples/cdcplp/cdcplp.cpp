@@ -52,7 +52,7 @@ int main(int argc, char** argv)
     max_cost += C * vehicle_cost;
     IntVar vars_cost = model.add_int_var(0, max_cost, true, "cost");
 
-    // Create plant open variables.
+    // Create variables to indicate whether a plant is open.
     Vector<BoolVar> vars_plant_open(P);
     for (int p = 0; p < P; ++p)
     {
@@ -60,31 +60,31 @@ int main(int argc, char** argv)
         vars_plant_open[p] = model.add_bool_var(name);
     }
 
-    // Create plant assignment variables.
-    Vector<Vector<BoolVar>> vars_plant_assign(C);
-    for (int c = 0; c < C; ++c)
-    {
-        const auto name = fmt::format("plant_assign[{}]", c);
-        auto var = model.add_int_var(0, P - 1, false, name);
-        vars_plant_assign[c] = model.add_indicator_vars(var);
-    }
-
-    // Create truck number variables.
-    Vector<IntVar> vars_truck_number(C);
-    for (int c = 0; c < C; ++c)
-    {
-        const auto name = fmt::format("truck_number[{}]", c);
-        vars_truck_number[c] = model.add_int_var(0, T - 1, true, name);
-    }
-
-    // Create variables for number of trucks.
-    Vector<IntVar> vars_nb_trucks(P);
-    Vector<Vector<BoolVar>> vars_nb_trucks_is(P);
+    // Create variables for number of trucks at a plant.
+    Vector<IntVar> vars_trucks_used_at_plant(P);
+    Vector<Vector<BoolVar>> vars_plant_trucks_used_indicator(P);
     for (int p = 0; p < P; ++p)
     {
         const auto name = fmt::format("nb_trucks[{}]", p);
-        vars_nb_trucks[p] = model.add_int_var(0, T, true, name);
-        vars_nb_trucks_is[p] = model.add_indicator_vars(vars_nb_trucks[p]);
+        vars_trucks_used_at_plant[p] = model.add_int_var(0, T, true, name);
+        vars_plant_trucks_used_indicator[p] = model.add_indicator_vars(vars_trucks_used_at_plant[p]);
+    }
+
+    // Create variables for the plant assigned to a client.
+    Vector<Vector<BoolVar>> vars_client_plant_indicator(C);
+    for (int c = 0; c < C; ++c)
+    {
+        const auto name = fmt::format("client_plant_indicator[{}]", c);
+        auto var = model.add_int_var(0, P - 1, false, name);
+        vars_client_plant_indicator[c] = model.add_indicator_vars(var);
+    }
+
+    // Create truck number variables.
+    Vector<IntVar> vars_truck_number_of_client(C);
+    for (int c = 0; c < C; ++c)
+    {
+        const auto name = fmt::format("truck_number_of_client[{}]", c);
+        vars_truck_number_of_client[c] = model.add_int_var(0, T - 1, true, name);
     }
 
     // Create objective function.
@@ -101,14 +101,14 @@ int main(int argc, char** argv)
         for (int c = 0; c < C; ++c)
             for (int p = 0; p < P; ++p)
             {
-                vars.push_back(vars_plant_assign[c][p]);
+                vars.push_back(vars_client_plant_indicator[c][p]);
                 coeffs.push_back(allocation_cost(c, p));
             }
 
         for (int p = 0; p < P; ++p)
             for (int t = 1; t <= T; ++t)
             {
-                vars.push_back(vars_nb_trucks_is[p][t]);
+                vars.push_back(vars_plant_trucks_used_indicator[p][t]);
                 coeffs.push_back(vehicle_cost * t);
             }
 
@@ -116,14 +116,14 @@ int main(int argc, char** argv)
     }
 
     // Create plant capacity constraint.
-    // sum(c in C) (demand[c] * [plant[c] == p]) <= capacity[p] * plant_open[p]
+    // sum(c in C) (client_demand[c] * [plant_of_client[c] == p]) <= plant_capacity[p] * plant_open[p]
     for (int p = 0; p < P; ++p)
     {
         Vector<BoolVar> vars(C);
         Vector<Int> coeffs(C);
         for (int c = 0; c < C; ++c)
         {
-            vars[c] = vars_plant_assign[c][p];
+            vars[c] = vars_client_plant_indicator[c][p];
             coeffs[c] = client_demand[c];
         }
         vars.push_back(vars_plant_open[p]);
@@ -133,9 +133,9 @@ int main(int argc, char** argv)
     }
 
     // Create truck distance constraints.
-    // cumulative(truck_number,
+    // cumulative(truck_number_of_client,
     //            1,
-    //            [distance[c,p] * [plant[c] == p] for all c],
+    //            [distance[c,p] * [plant_of_client[c] == p] for all c],
     //            max_distance)
     for (int p = 0; p < P; ++p)
     {
@@ -145,8 +145,8 @@ int main(int argc, char** argv)
         Vector<Int> resource(C);
         for (int c = 0; c < C; ++c)
         {
-            active[c] = vars_plant_assign[c][p];
-            start[c] = vars_truck_number[c];
+            active[c] = vars_client_plant_indicator[c][p];
+            start[c] = vars_truck_number_of_client[c];
             resource[c] = distance(c, p);
             release_assert(resource[c] <= max_distance,
                            "{} {}", resource[c], max_distance);
@@ -159,14 +159,14 @@ int main(int argc, char** argv)
     }
 
     // Create truck distance relaxation.
-    // sum(c in C) (distance[c,p] * [plant[c] == p]) <= max_distance * nb_trucks[p]
+    // sum(c in C) (distance[c,p] * [plant_of_client[c] == p]) <= max_distance * trucks_used_at_plant[p]
     for (int p = 0; p < P; ++p)
     {
         Vector<BoolVar> vars(C);
         Vector<Int> coeffs(C);
         for (int c = 0; c < C; ++c)
         {
-            vars[c] = vars_plant_assign[c][p];
+            vars[c] = vars_client_plant_indicator[c][p];
             coeffs[c] = distance(c, p);
         }
 
@@ -174,35 +174,35 @@ int main(int argc, char** argv)
                                 coeffs,
                                 Sign::LE,
                                 0,
-                                vars_nb_trucks[p],
+                                vars_trucks_used_at_plant[p],
                                 max_distance);
     }
 
     // Calculate number of trucks used.
-    // [plant[c] == p] -> nb_trucks[p] >= truck_number[c] + 1
-    // [plant[c] == p] -> -1 >= truck_number[c] - nb_trucks[p]
-    // [plant[c] == p] -> truck_number[c] - nb_trucks[p] <= -1
+    // [plant_of_client[c] == p] -> trucks_used_at_plant[p] >= truck_number_of_client[c] + 1
+    // [plant_of_client[c] == p] -> -1 >= truck_number_of_client[c] - trucks_used_at_plant[p]
+    // [plant_of_client[c] == p] -> truck_number_of_client[c] - trucks_used_at_plant[p] <= -1
     for (int c = 0; c < C; ++c)
         for (int p = 0; p < P; ++p)
         {
-            model.add_constr_reify_subtraction_leq(vars_plant_assign[c][p],
-                                                   vars_truck_number[c],
-                                                   vars_nb_trucks[p],
+            model.add_constr_reify_subtraction_leq(vars_client_plant_indicator[c][p],
+                                                   vars_truck_number_of_client[c],
+                                                   vars_trucks_used_at_plant[p],
                                                    -1);
         }
 
     // Add redundant constraint.
-    // nb_trucks[p] <= sum(c in C) ([plant[c] == p])
-    // sum(c in C) ([plant[c] == p]) >= nb_trucks[p]
+    // trucks_used_at_plant[p] <= sum(c in C) ([plant_of_client[c] == p])
+    // sum(c in C) ([plant_of_client[c] == p]) >= trucks_used_at_plant[p]
     for (int p = 0; p < P; ++p)
     {
         Vector<BoolVar> vars(C);
         Vector<Int> coeffs(C, 1);
         for (int c = 0; c < C; ++c)
         {
-            vars[c] = vars_plant_assign[c][p];
+            vars[c] = vars_client_plant_indicator[c][p];
         }
-        model.add_constr_linear(vars, coeffs, Sign::GE, 0, vars_nb_trucks[p]);
+        model.add_constr_linear(vars, coeffs, Sign::GE, 0, vars_trucks_used_at_plant[p]);
     }
 
     // Solve.
@@ -211,20 +211,19 @@ int main(int argc, char** argv)
     // Print solution.
     if (model.get_status() == Status::Feasible || model.get_status() == Status::Optimal)
     {
-        println("   LB {}, UB {}", model.get_lb(), model.get_ub());
+        println("LB: {}", model.get_dual_bound());
+        println("UB: {}", model.get_primal_bound());
 
         for (int c = 0; c < C; ++c)
             for (int p = 0; p < P; ++p)
-                if (model.get_sol(vars_plant_assign[c][p]))
+                if (model.get_sol(vars_client_plant_indicator[c][p]))
                 {
-                    println("   Customer {}, Plant {}, Truck {}",
-                            c, p, model.get_sol(vars_truck_number[c]));
+                    println("Customer {}: Plant {}, Truck {}", c, p, model.get_sol(vars_truck_number_of_client[c]));
                 }
 
         for (int p = 0; p < P; ++p)
         {
-            println("   Plant {}, Number of trucks {}",
-                    p, model.get_sol(vars_nb_trucks[p]));
+            println("Plant {}: Number of trucks {}", p, model.get_sol(vars_trucks_used_at_plant[p]));
         }
     }
 

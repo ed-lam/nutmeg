@@ -60,7 +60,7 @@ class Matrix
     inline size_t cols() const { return _cols; }
     inline const T operator()(const size_t i, const size_t j) const
     {
-#ifdef DEBUG
+#ifndef NDEBUG
         if (i >= rows() || j >= cols())
         {
             printf("Accessing matrix element (%lu,%lu) is out of bounds\n", i, j);
@@ -73,7 +73,7 @@ class Matrix
     // Setters
     inline T& operator()(const size_t i, const size_t j)
     {
-#ifdef DEBUG
+#ifndef NDEBUG
         if (i >= rows() || j >= cols())
         {
             printf("Accessing matrix element (%lu,%lu) is out of bounds\n", i, j);

@@ -1,10 +1,12 @@
 #ifndef NUTMEG_DEBUG_H
 #define NUTMEG_DEBUG_H
 
+#define FMT_HEADER_ONLY 1
+
 #include "fmt/format.h"
 #include "scip/scip.h"
 
-#ifdef DEBUG
+#ifndef NDEBUG
 #define println(format, ...) do { \
     fmt::print(format "\n", ##__VA_ARGS__); \
     fflush(stdout); \
@@ -23,7 +25,7 @@
 #define debug(format, ...) {}
 #endif
 
-#ifdef DEBUG
+#ifndef NDEBUG
 #define err(format, ...) do { \
     fmt::print(stderr, "Error: " format "\n", ##__VA_ARGS__); \
     fmt::print(stderr, "Function: {}\n", __PRETTY_FUNCTION__); \
@@ -42,7 +44,7 @@
     if (!(condition)) err(__VA_ARGS__); \
 } while (false)
 
-#ifdef DEBUG
+#ifndef NDEBUG
 #define debug_assert(condition) release_assert(condition, #condition)
 #else
 #define debug_assert(condition) {}

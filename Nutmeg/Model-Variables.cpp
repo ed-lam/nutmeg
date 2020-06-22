@@ -54,6 +54,16 @@ IntVar Model::add_int_var(
     release_assert(lb <= ub,
                    "Failed to create integer variable with bounds {} and {}", lb, ub);
 
+    // Retrieve existing variable if the new variable is a constant and already added.
+    if (lb == ub)
+    {
+        auto it = probdata_.constants_.find(lb);
+        if (it != probdata_.constants_.end())
+        {
+            return it->second;
+        }
+    }
+
     // Create variable object.
     IntVar int_var(this, nb_int_vars());
 
@@ -83,6 +93,12 @@ IntVar Model::add_int_var(
     // Store variable name.
     probdata_.int_vars_name_.emplace_back(name);
 
+    // Add to set of constants.
+    if (lb == ub)
+    {
+        probdata_.constants_.insert({lb, int_var});
+    }
+
     // Check.
     debug_assert(probdata_.mip_int_vars_.size() == probdata_.mip_indicator_vars_idx_.size());
     debug_assert(probdata_.mip_indicator_vars_idx_.size() == probdata_.cp_int_vars_.size());
@@ -93,6 +109,99 @@ IntVar Model::add_int_var(
     // Return.
     return int_var;
 }
+
+IntVar Model::add_mip_var(IntVar var)
+{
+    // Check.
+    release_assert(var.model == this, "Variable belongs to a different model");
+    release_assert(0 <= var.idx && var.idx < nb_int_vars(), "Variable is invalid");
+
+    // Add MIP variable.
+    SCIP_VAR*& mip_var = probdata_.mip_int_vars_[var.idx];
+    if (!mip_var)
+    {
+        // Add linking constraint if indicator variables already exist.
+        scip_assert(SCIPcreateVarBasic(mip_,
+                                       &mip_var,
+                                       name(var).c_str(),
+                                       lb(var),
+                                       ub(var),
+                                       0.0,
+                                       SCIP_VARTYPE_INTEGER));
+        release_assert(mip_var, "Failed to create integer variable in MIP");
+        scip_assert(SCIPaddVar(mip_, mip_var));
+
+        // Add linking constraint.
+        auto& indicator_vars_idx = probdata_.mip_indicator_vars_idx_[var.idx];
+        if (!indicator_vars_idx.empty())
+        {
+            // Get the bounds.
+            const auto var_lb = lb(var);
+            const auto var_ub = ub(var);
+            const auto size = var_ub - var_lb + 1;
+
+            // Create constraint.
+            SCIP_CONS* cons = nullptr;
+            const auto constr_name = fmt::format("indicator_vars_linking_{}",
+                                                 probdata_.nb_indicator_vars_linking_constraints_++);
+            scip_assert(SCIPcreateConsBasicLinear(mip_,
+                                                  &cons,
+                                                  constr_name.c_str(),
+                                                  0,
+                                                  nullptr,
+                                                  nullptr,
+                                                  0,
+                                                  0));
+            debug_assert(cons);
+
+            // Add coefficients.
+            for (Int idx = 0; idx < size; ++idx)
+            {
+                const auto var_idx = indicator_vars_idx[idx];
+                debug_assert(get_false().idx == 0);
+                if (var_idx > 0)
+                {
+                    auto var = probdata_.mip_bool_vars_[var_idx];
+                    const auto val = var_lb + idx;
+                    scip_assert(SCIPaddCoefLinear(mip_, cons, var, val));
+                }
+            }
+            scip_assert(SCIPaddCoefLinear(mip_, cons, mip_var, -1));
+
+            // Add constraint.
+            scip_assert(SCIPaddCons(mip_, cons));
+            scip_assert(SCIPreleaseCons(mip_, &cons));
+        }
+    }
+
+    // Return.
+    return var;
+}
+
+//BoolVar Model::add_mip_var(BoolVar var)
+//{
+//    // Check.
+//    release_assert(var.model == this, "Variable belongs to a different model");
+//    release_assert(0 <= var.idx && var.idx < nb_bool_vars(), "Variable is invalid");
+//
+//    // Add MIP variable.
+//    SCIP_VAR*& mip_var = probdata_.mip_bool_vars_[var.idx];
+//    if (!mip_var)
+//    {
+//        scip_assert(SCIPcreateVarBasic(mip_,
+//                                       &mip_var,
+//                                       name(var).c_str(),
+//                                       0.0,
+//                                       1.0,
+//                                       0.0,
+//                                       SCIP_VARTYPE_BINARY));
+//        release_assert(mip_var, "Failed to create binary variable in MIP");
+//        scip_assert(SCIPaddVar(mip_, mip_var));
+//    }
+//
+//    // Return.
+//    return var;
+//}
 
 Vector<BoolVar> Model::add_indicator_vars(
     const IntVar var,
@@ -120,16 +229,26 @@ Vector<BoolVar> Model::add_indicator_vars(
             domain_copy.resize(size);
             std::iota(domain_copy.begin(), domain_copy.end(), var_lb);
         }
+        else
+        {
+            std::sort(domain_copy.begin(), domain_copy.end());
+            for (size_t idx = 0; idx < domain_copy.size() - 1; ++idx)
+            {
+                release_assert(domain_copy[idx] != domain_copy[idx + 1],
+                               "Cannot create MIP indicator variables because of duplicate indicator values");
+            }
+        }
 
         // Create indicator variables.
-        indicator_vars_idx.resize(size);
+        debug_assert(get_false().idx == 0);
+        indicator_vars_idx.resize(size, 0);
         Vector<SCIP_VAR*> indicator_vars(size);
         Vector<Float> indicator_vals(size);
         for (const auto val : domain_copy)
         {
             // Create variable name.
             const auto idx = val - var_lb;
-            auto ind_var_name = fmt::format("[{}={}]", name(var), val);
+            auto ind_var_name = fmt::format("{{{}={}}}", name(var), val);
 
             // Create variable in MIP.
             SCIP_VAR*& ind_var = indicator_vars[idx];
@@ -171,9 +290,11 @@ Vector<BoolVar> Model::add_indicator_vars(
         {
             // Create constraint.
             SCIP_CONS* cons = nullptr;
+            const auto constr_name = fmt::format("indicator_vars_setpart_{}",
+                                                 probdata_.nb_indicator_vars_setpart_constraints_++);
             scip_assert(SCIPcreateConsBasicSetpart(mip_,
                                                    &cons,
-                                                   "",
+                                                   constr_name.c_str(),
                                                    0,
                                                    nullptr));
             debug_assert(cons);
@@ -195,9 +316,11 @@ Vector<BoolVar> Model::add_indicator_vars(
         {
             // Create constraint.
             SCIP_CONS* cons = nullptr;
+            const auto constr_name = fmt::format("indicator_vars_linking_{}",
+                                                 probdata_.nb_indicator_vars_linking_constraints_++);
             scip_assert(SCIPcreateConsBasicLinear(mip_,
                                                   &cons,
-                                                  "",
+                                                  constr_name.c_str(),
                                                   0,
                                                   nullptr,
                                                   nullptr,
@@ -228,6 +351,27 @@ Vector<BoolVar> Model::add_indicator_vars(
         output[idx] = BoolVar(this, ind_var_idx);
     }
     return output;
+}
+
+void Model::add_mip_int_var_as_bool_var_alias(
+    BoolVar bool_var,
+    IntVar int_var
+)
+{
+    // Check.
+    release_assert(int_var.model == this, "Integer variable belongs to a different model");
+    release_assert(bool_var.model == this, "Boolean variable belongs to a different model");
+    release_assert(0 <= int_var.idx && int_var.idx < nb_int_vars(), "Integer variable is invalid");
+    release_assert(0 <= bool_var.idx && bool_var.idx < nb_bool_vars(), "Boolean variable is invalid");
+    release_assert(!mip_var(int_var), "Integer variable is already created inside MIP solver");
+    release_assert(mip_var(bool_var), "Boolean variable is not yet created inside MIP solver");
+//    release_assert(SCIPvarGetStatus(mip_var(bool_var)) == SCIP_VARSTATUS_ORIGINAL,
+//                   "Boolean variable is not a variable in the original problem (status {})",
+//                   SCIPvarGetStatus(mip_var(bool_var)));
+
+    // Set integer variable to existing Boolean variable in MIP solver.
+    probdata_.mip_int_vars_[int_var.idx] = probdata_.mip_bool_vars_[bool_var.idx];
+    scip_assert(SCIPcaptureVar(mip_, probdata_.mip_int_vars_[int_var.idx]));
 }
 
 BoolVar Model::get_neg(const BoolVar var)
@@ -262,26 +406,6 @@ BoolVar Model::get_neg(const BoolVar var)
 
     // Done.
     return neg_var;
-}
-
-bool Model::get_sol(const BoolVar var)
-{
-    // Check.
-    release_assert(var.model == this, "Variable belongs to a different model");
-    release_assert(0 <= var.idx && var.idx < nb_bool_vars(), "Variable is invalid");
-
-    // Get value.
-    return sol_.bool_vars_sol_[var.idx];
-}
-
-Int Model::get_sol(const IntVar var)
-{
-    // Check.
-    release_assert(var.model == this, "Variable belongs to a different model");
-    release_assert(0 <= var.idx && var.idx < nb_int_vars(), "Variable is invalid");
-
-    // Get value.
-    return sol_.int_vars_sol_[var.idx];
 }
 
 }
