@@ -7,10 +7,9 @@ Nutmeg serves as a valuable tool for novice modelers to try hybrid solving and f
 
 **Nutmeg is released for research purposes and is perpetually in alpha status. No support is provided. Do not trust results from it; verify all results with another solver.**
 
-If you use it, please cite the following papers:
+If you use it, please cite the following paper:
 
-- Branch-and-Check with Explanations for the Vehicle Routing Problem with Time Windows. Lam, E. and Van Hentenryck, P. CP2017.
-- Automatic Logic-Based Benders Decomposition with MiniZinc. Davies, T. O., Gange, G. and Stuckey, P. J. AAAI2017.
+Lam, E., Gange, G., Stuckey, P. J., Van Hentenryck, P., & Dekker, J. J. (2020). Nutmeg: A MIP and CP Hybrid Solver Using Branch-and-Check. SN Operations Research Forum. (forthcoming)
 
 License
 -------
