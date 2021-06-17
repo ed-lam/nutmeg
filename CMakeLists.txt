@@ -134,6 +134,15 @@ add_executable(ps_makespan
 target_include_directories(ps_makespan PRIVATE examples/ps_makespan)
 target_link_libraries(ps_makespan fmt::fmt-header-only geas libscip)
 
+# Resource-constrained project scheduling problem - weighted earliness and tardiness objective function
+add_executable(rcpsp_wet
+    ${NUTMEG_FILES}
+    examples/rcpsp_wet/InstanceData.h
+    examples/rcpsp_wet/InstanceData.cpp
+    examples/rcpsp_wet/rcpsp_wet.cpp)
+target_include_directories(rcpsp_wet PRIVATE examples/rcpsp_wet)
+target_link_libraries(rcpsp_wet fmt::fmt-header-only geas libscip)
+
 # Vehicle routing problem with location congestion - cost objective function
 add_executable(vrplc_cost
         ${NUTMEG_FILES}
