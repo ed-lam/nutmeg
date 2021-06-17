@@ -522,7 +522,8 @@ Model::add_constr_cumulative(
     const Vector<IntVar>& start,
     const Vector<Int>& duration,
     const Vector<Int>& resource,
-    const Int capacity
+    const Int capacity,
+    const bool create_mip_linearization
 )
 {
     // Check.
@@ -533,7 +534,7 @@ Model::add_constr_cumulative(
     const Int N = start.size();
 
     // Create constraint in MIP if solving using MIP.
-    if (method_ == Method::MIP)
+    if (method_ == Method::MIP || create_mip_linearization)
     {
         // Create binarization variables.
         for (Int j = 0; j < N; ++j)
@@ -568,16 +569,17 @@ Model::add_constr_cumulative(
 
             // Add variables to constraint.
             for (Int j = 0; j < N; ++j)
-            {
-                for (Int u = std::max(t - duration[j] + 1, lb(start[j]));
-                     u <= std::min(t, ub(start[j]));
-                     ++u)
+                if (resource[j] > 0 && duration[j] > 0)
                 {
-                    auto var = mip_indicator_var(start[j], u);
-                    debug_assert(var);
-                    SCIPaddCoefKnapsack(mip_, cons, var, resource[j]);
+                    for (Int u = std::max(t - duration[j] + 1, lb(start[j]));
+                         u <= std::min(t, ub(start[j]));
+                         ++u)
+                    {
+                        auto var = mip_indicator_var(start[j], u);
+                        debug_assert(var);
+                        SCIPaddCoefKnapsack(mip_, cons, var, resource[j]);
+                    }
                 }
-            }
 
             // Add constraint.
             scip_assert(SCIPaddCons(mip_, cons));
@@ -587,17 +589,18 @@ Model::add_constr_cumulative(
 
     // Create constraint in CP.
     {
-        vec<geas::intvar> start2(N);
-        vec<int> duration2(N);
-        vec<int> resource2(N);
+        vec<geas::intvar> start2;
+        vec<int> duration2;
+        vec<int> resource2;
         for (Int idx = 0; idx < N; ++idx)
-        {
-            release_assert(start[idx].is_valid(),
-                           "Variable is not valid in creating cumulative constraint");
-            start2[idx] = cp_var(start[idx]);
-            duration2[idx] = duration[idx];
-            resource2[idx] = resource[idx];
-        }
+            if (resource[idx] > 0 && duration[idx] > 0)
+            {
+                release_assert(start[idx].is_valid(),
+                               "Variable is not valid in creating cumulative constraint");
+                start2.push(cp_var(start[idx]));
+                duration2.push(duration[idx]);
+                resource2.push(resource[idx]);
+            }
 
         geas_add_constr(geas::cumulative(cp_.data,
                                          start2,

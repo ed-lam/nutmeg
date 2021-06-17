@@ -176,7 +176,8 @@ class Model
     bool add_constr_cumulative(const Vector<IntVar>& start,
                                const Vector<Int>& duration,
                                const Vector<Int>& resource,
-                               const Int capacity);
+                               const Int capacity,
+                               const bool create_mip_linearization = false);
 
     // cumulative(start, duration, [resource[i] * active[i] for all i], capacity)
     // start[i] + duration[i] <= makespan for all i
