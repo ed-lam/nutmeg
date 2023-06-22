@@ -3,4 +3,4 @@
 	url = https://github.com/fmtlib/fmt.git
 [submodule "geas"]
 	path = geas
-	url = https://bitbucket.org/gkgange/geas.git
+	url = https://github.com/ed-lam/nutmeg-geas
